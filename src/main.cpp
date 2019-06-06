@@ -45,7 +45,7 @@ int main(int argc, char** argv){
 
     Scene scene(scene_file);
     
-    Renderer renderer("render_kenel.cl");
+    Renderer renderer("src/render_kernel.cl",800,600);
     renderer.render(scene);
     renderer.save_image(save_file);
     

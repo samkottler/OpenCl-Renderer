@@ -1,0 +1,19 @@
+material white
+c 0.9 0.9 0.9
+e 0   0   0
+done
+
+material red
+c 0.9 0.1 0.1
+e 0   0   0
+done
+
+material green
+c 0.1 0.9 0.1
+e 0   0   0
+done
+
+material light
+c 1   1   1
+e 10  10  10
+done

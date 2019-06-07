@@ -19,8 +19,9 @@ private:
     cl::CommandQueue queue;
     const int width;
     const int height;
+    const int samples;
 public:
-    Renderer(std::string kernel_filename, int width, int height);
+    Renderer(std::string kernel_filename, int width, int height, int samples);
     void render(Scene scene);
     void save_image(std::string filename);
 };

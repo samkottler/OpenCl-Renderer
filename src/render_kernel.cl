@@ -1,11 +1,12 @@
 #include "Camera.h"
+#include "Material.h"
 #include "Ray.h"
 #include "Triangle.h"
 
 typedef struct _dat{
     float t;
-    float3 color;
     float3 normal;
+    int mat;
 } HitData;
 
 //copied from http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
@@ -57,19 +58,20 @@ bool intersect_scene(global Triangle* triangles, int num_tris, Ray ray, HitData*
 	float3 v1 = triangles[id].vert1;
 	float3 v2 = triangles[id].vert2;
 	dat->t = t;
-	dat->color = triangles[id].color;
 	dat->normal = normalize(cross(v2-v0, v1-v0));
+	dat->mat = triangles[id].material;
     }
     return t < 1e19;
 }
 
-float3 trace(global Triangle* triangles, int num_tris, Ray ray, uint2* rand_state){
+float3 trace(global Triangle* triangles, int num_tris, Ray ray, global Material* materials, uint2* rand_state){
     float3 color = (float3)(0.0,0.0,0.0);
     float3 mask = (float3)(1.0,1.0,1.0);
     for (int bounces = 0; bounces < 5; ++bounces){
 	HitData dat;
 	if(intersect_scene(triangles, num_tris, ray, &dat)){
-	    ray.origin = ray.origin + dat.t*ray.direction;
+	    Material mat = materials[dat.mat];
+	    ray.origin = ray.origin + dat.t*ray.direction + 0.01f*dat.normal;
 	    float theta = 2*M_PI*((float)rand(rand_state)/(float)0xffffffffU);
 	    float cosphi = ((float)rand(rand_state)/(float)0xffffffffU);
 	    float sinphi = sqrt(1-cosphi*cosphi);
@@ -78,7 +80,8 @@ float3 trace(global Triangle* triangles, int num_tris, Ray ray, uint2* rand_stat
 	    float3 u = normalize(cross(fabs(w.x)>0.0001?(float3)(0,1,0):(float3)(1,0,0),w));
 	    float3 v = cross(w,u);
 	    ray.direction = normalize(u*cos(theta)*sinphi + v*sin(theta)*sinphi + w*cosphi);
-	    mask = mask*dat.color;
+	    color += mask*mat.emission;
+	    mask = mask*mat.color;
 	}
 	else{
 	    float t = (ray.direction.y + 1)/2;
@@ -89,7 +92,7 @@ float3 trace(global Triangle* triangles, int num_tris, Ray ray, uint2* rand_stat
     return color;
 }
 
-void kernel render(global float3* image, global Triangle* triangles, int num_tris, Camera camera){
+void kernel render(global float3* image, global Triangle* triangles, int num_tris, global Material* materials, Camera camera){
     int x = get_global_id(0);
     int y = get_global_id(1);
     int width = get_global_size(0);
@@ -115,9 +118,9 @@ void kernel render(global float3* image, global Triangle* triangles, int num_tri
     ray.direction = normalize(screen_corner + horiz*(float)x/(float)width + vert*(float)y/(float)height - ray.origin);
 
     float3 color = (float3)(0,0,0);
-    for (int sample = 0; sample < 50; ++sample){
-	color += trace(triangles, num_tris, ray, &rand_state);
+    for (int sample = 0; sample < SAMPLES; ++sample){
+	color += trace(triangles, num_tris, ray, materials, &rand_state);
     }
     
-    image[(height-y-1)*width+x] = color/50;
+    image[(height-y-1)*width+x] = color/SAMPLES;
 }

@@ -6,5 +6,5 @@ typedef struct _Triangle{
     float3 vert0;
     float3 vert1;
     float3 vert2;
-    float3 color;
+    int material;
 } Triangle;

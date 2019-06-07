@@ -1,14 +1,18 @@
 #include <fstream>
+#include <random>
 #include <streambuf>
 #include <string>
 #include <vector>
 
 #include <CL/cl.hpp>
 
+#include "Camera.h"
 #include "error.hpp"
+#include "float3.h"
 #include "lodepng.h"
 #include "Renderer.hpp"
 #include "Scene.hpp"
+#include "Triangle.h"
 
 void Renderer::get_platform(){
     std::vector<cl::Platform> all_platforms;
@@ -58,16 +62,37 @@ Renderer::Renderer(std::string kernel_filename, int w, int h) : width(w), height
 }
 
 void Renderer::render(Scene scene){
+    std::vector<Triangle> triangles;
+    triangles.push_back({{1,-1,-1},{1,-1,1},{-1,-1,1},{1,0,0}});
+    triangles.push_back({{-1,-1,1},{-1,-1,-1},{1,-1,-1},{1,0,0}});
+    triangles.push_back({{-1,-0.9,1},{-1,-0.9,-1},{1,-0.9,-1},{0,0,0}});
+
+    std::vector<float3> output(width*height);
+    std::default_random_engine rand_gen;
+    for (int i = 0; i< output.size(); ++i){
+	union {
+	    int val;
+	    float f;
+	} u;
+	u.val = rand_gen();
+	output[i].x = u.f;
+	u.val = rand_gen();
+	output[i].y = u.f;
+    }
     
-    cl::Buffer out_buf(context, CL_MEM_READ_WRITE, sizeof(cl_float3)*width*height);
+    
+    cl::Buffer out_buf(context, CL_MEM_READ_WRITE, sizeof(float3)*width*height);
+    cl::Buffer triangle_buf(context, CL_MEM_READ_WRITE, sizeof(Triangle)*triangles.size());
 
+    queue.enqueueWriteBuffer(triangle_buf, CL_TRUE, 0, sizeof(Triangle)*triangles.size(), triangles.data());
+    queue.enqueueWriteBuffer(out_buf, CL_TRUE, 0, output.size()*sizeof(float3), output.data());
+    
     cl::Kernel kernel = cl::Kernel(program, "render");    
-    cl::make_kernel<cl::Buffer> render_kernel(kernel);
+    cl::make_kernel<cl::Buffer,cl::Buffer, int, Camera> render_kernel(kernel);
     cl::EnqueueArgs eargs(queue, cl::NullRange, cl::NDRange(width,height), cl::NDRange(8,8));
-    render_kernel(eargs, out_buf).wait();
+    render_kernel(eargs, out_buf, triangle_buf, triangles.size(), Camera({{0,0,2}, {0,0,0},20,0.5})).wait();
 
-    std::vector<cl_float3> output(width*height);
-    queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(cl_float3)*width*height, output.data());
+    queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
     
     for (int i = 0; i < width*height; ++i){
 	image[4*i + 0] = output[i].x*255;

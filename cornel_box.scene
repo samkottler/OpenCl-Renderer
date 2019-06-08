@@ -1,4 +1,5 @@
 load cornel_box.materials
+load cornel_box.camera
 
 v -1 -1 -1
 v -1 -1  5

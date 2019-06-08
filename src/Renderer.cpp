@@ -97,8 +97,7 @@ void Renderer::render(Scene scene){
     cl::EnqueueArgs eargs(queue, cl::NullRange, cl::NDRange(width,height), cl::NDRange(8,8));
 
     std::clog << "Starting render..." << std::endl;
-    render_kernel(eargs, out_buf, triangle_buf, scene.triangles.size(), material_buf,
-		  Camera({{0,0,2}, {0,0,0},20,0.5})).wait();
+    render_kernel(eargs, out_buf, triangle_buf, scene.triangles.size(), material_buf, scene.camera).wait();
 
     queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
     

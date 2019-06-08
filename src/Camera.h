@@ -5,6 +5,6 @@
 typedef struct _Camera{
     float3 location;
     float3 looking_at;
-    float aperature;
+    float aperture;
     float lens_radius;
 } Camera;

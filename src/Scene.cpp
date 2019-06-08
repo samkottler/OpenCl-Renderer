@@ -4,6 +4,7 @@
 #include <sstream>
 #include <ios>
 
+#include "Camera.h"
 #include "error.hpp"
 #include "float3.h"
 #include "Scene.hpp"
@@ -12,6 +13,8 @@
 void Scene::load_materials(std::string filename){
     std::ifstream material_file(filename, std::ios::in);
     std::string line;
+    if(!material_file)
+	print_error("Unable to find file " + filename);
     int line_num = 0;
     std::string mat_name;
     float3 color = {0,0,0};
@@ -58,6 +61,56 @@ void Scene::load_materials(std::string filename){
     }
 }
 
+void Scene::load_camera(std::string filename){
+    std::ifstream camera_file(filename, std::ios::in);
+    std::string line;
+    if (!camera_file)
+	print_error("Unable to find file " + filename);
+    int line_num;
+
+    float3 from;
+    float3 to;
+    float aperture;
+    float lens_radius;
+    while(getline(camera_file, line)){
+	line_num++;
+	std::istringstream str(line);
+	std::string type;
+	str>>type;
+	if (type == "f"){
+	    float x,y,z=-1e20;
+	    str >> x;
+	    str >> y;
+	    str >> z;
+	    if (z < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": Unable to creat location");
+	    from = {x,y,z};
+	}
+	if (type == "t"){
+	    float x,y,z=-1e20;
+	    str >> x;
+	    str >> y;
+	    str >> z;
+	    if (z < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": Unable to creat focal point");
+	    to = {x,y,z};
+	}
+	if (type == "a"){
+	    aperture = -1e20;
+	    str >> aperture;
+	    if (aperture < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": No aperture specified");
+	}
+	if (type == "r"){
+	    lens_radius = -1e20;
+	    str >> lens_radius;
+	    if (lens_radius < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": No lens radius specified");
+	}
+    }
+    camera = {from, to, aperture, lens_radius};
+}
+
 Scene::Scene(std::string filename){
     std::clog << "Reading scene..." << std::endl;
     std::ifstream scene_file(filename, std::ios::in);
@@ -76,10 +129,12 @@ Scene::Scene(std::string filename){
 	    std::string load_name;
 	    str >> load_name;
 	    if (load_name == "")
-		print_error("No file specified on line " + std::to_string(line_num) + " of " + filename);
+		print_error(filename + ":" + std::to_string(line_num) + ": No file specified");
 	    std::string extension = load_name.substr(load_name.find(".")+1);
 	    if (extension == "materials")
 		load_materials(load_name);
+	    else if (extension == "camera")
+		load_camera(load_name);
 	    else
 		print_error(filename + ":" + std::to_string(line_num) + ": Extension not recognized");
 	}

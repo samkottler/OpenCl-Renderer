@@ -3,6 +3,8 @@
 #include "Ray.h"
 #include "Triangle.h"
 
+#define RAND_MAX (0xffffffffU)
+
 typedef struct _dat{
     float t;
     float3 normal;
@@ -72,8 +74,8 @@ float3 trace(global Triangle* triangles, int num_tris, Ray ray, global Material*
 	if(intersect_scene(triangles, num_tris, ray, &dat)){
 	    Material mat = materials[dat.mat];
 	    ray.origin = ray.origin + dat.t*ray.direction + 0.01f*dat.normal;
-	    float theta = 2*M_PI*((float)rand(rand_state)/(float)0xffffffffU);
-	    float cosphi = ((float)rand(rand_state)/(float)0xffffffffU);
+	    float theta = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
+	    float cosphi = ((float)rand(rand_state)/(float)RAND_MAX);
 	    float sinphi = sqrt(1-cosphi*cosphi);
 	   
 	    float3 w = dat.normal;
@@ -106,19 +108,26 @@ void kernel render(global float3* image, global Triangle* triangles, int num_tri
     float3 v = cross(w,u);
 
     float focal_length = length(camera.location - camera.looking_at);
-    float screen_height = native_tan(camera.aperature/2);
+    float screen_height = native_tan(camera.aperture/2);
     float screen_width = screen_height*width/height;
 
     float3 screen_corner = camera.location - screen_width*focal_length*u - screen_height*focal_length*v - focal_length*w;
     float3 horiz = 2*screen_width*focal_length*u;
     float3 vert = 2*screen_height*focal_length*v;
-    
-    Ray ray;
-    ray.origin = camera.location;
-    ray.direction = normalize(screen_corner + horiz*(float)x/(float)width + vert*(float)y/(float)height - ray.origin);
 
     float3 color = (float3)(0,0,0);
     for (int sample = 0; sample < SAMPLES; ++sample){
+	Ray ray;
+	
+	float theta = 2*M_PI*(float)rand(&rand_state)/(float)RAND_MAX;
+	float rad = camera.lens_radius*(float)rand(&rand_state)/(float)RAND_MAX;
+	ray.origin = camera.location + rad*(u*cos(theta) + v*sin(theta));
+
+	float xs = (float)rand(&rand_state)/(float)RAND_MAX;
+	float ys = (float)rand(&rand_state)/(float)RAND_MAX;
+
+	ray.direction = normalize(screen_corner + horiz*(float)(x+xs)/(float)width + vert*(float)(y+ys)/(float)height - ray.origin);
+	
 	color += trace(triangles, num_tris, ray, materials, &rand_state);
     }
     

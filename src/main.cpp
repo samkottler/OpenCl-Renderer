@@ -10,10 +10,11 @@
 void usage(std::string executable){
     std::cout << "Usage: " << executable << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  -i <file>   Render scene described in <file>." << std::endl;
-    std::cout << "  -h          Display this message." << std::endl;
-    std::cout << "  -o <file>   Save the output image to <file>." << std::endl;
-    std::cout << "  -s <num>    Trace a maximum of <num> paths for each pixel." << std::endl;
+    std::cout << "  -i <file>           Render scene described in <file>." << std::endl;
+    std::cout << "  -h                  Display this message." << std::endl;
+    std::cout << "  -o <file>           Save the output image to <file>." << std::endl;
+    std::cout << "  -p <num>            Trace a maximum of <num> paths for each pixel." << std::endl;
+    std::cout << "  -s <width>x<height> Output an image with the given resolution." << std::endl;
     exit(0);
 }
 
@@ -47,12 +48,26 @@ int main(int argc, char** argv){
 		usage(argv[0]);
 	    }
 	}
-	if (strcmp(argv[i], "-s") == 0){
+	if (strcmp(argv[i], "-p") == 0){
 	    if (i+1 < argc){
 		samples = atoi(argv[i+1]);
+		++i;
 	    }
 	    else{
 		std::cout << "No maximum samples specified" << std::endl;
+		usage(argv[0]);
+	    }
+	}
+	if (strcmp(argv[i], "-s") == 0){
+	    if (i+1 < argc){
+		std::string res(argv[i+1]);
+		width = std::stoi(res.substr(0,res.find("x")));
+		height = std::stoi(res.substr(res.find("x") + 1));
+
+		++i;
+	    }
+	    else{
+		std::cout << "No resolution specified" << std::endl;
 		usage(argv[0]);
 	    }
 	}

@@ -81,7 +81,7 @@ int main(int argc, char** argv){
     Renderer renderer("src/render_kernel.cl", width, height, samples);
     std::clog << "Image info:" << std::endl;
     std::clog << "  Width:     " << width << std::endl;
-    std::clog << "  Hiehgt:    " << height << std::endl;
+    std::clog << "  Hieght:    " << height << std::endl;
     std::clog << "  Samples:   " << samples << std::endl;
     std::clog << "  Triangles: " << scene.triangles.size() << std::endl;
 

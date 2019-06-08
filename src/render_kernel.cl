@@ -60,7 +60,7 @@ bool intersect_scene(global Triangle* triangles, int num_tris, Ray ray, HitData*
 	float3 v1 = triangles[id].vert1;
 	float3 v2 = triangles[id].vert2;
 	dat->t = t;
-	dat->normal = normalize(cross(v2-v0, v1-v0));
+	dat->normal = normalize(cross(v1-v0, v2-v0));
 	dat->mat = triangles[id].material;
     }
     return t < 1e19;

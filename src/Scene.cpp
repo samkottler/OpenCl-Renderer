@@ -111,6 +111,68 @@ void Scene::load_camera(std::string filename){
     camera = {from, to, aperture, lens_radius};
 }
 
+void Scene::load_ply(std::string filename, int mat_idx, float3 translate, float scale, float3 xaxis, float3 yaxis){
+    float3 zaxis = cross(xaxis, yaxis);
+    float temp  = zaxis.x;
+    zaxis.x = xaxis.z;
+    xaxis.z = temp;
+    temp = zaxis.y;
+    zaxis.y = yaxis.z;
+    yaxis.z = temp;
+    temp = xaxis.y;
+    xaxis.y = yaxis.x;
+    yaxis.x = temp;
+    
+    std::ifstream file(filename, std::ios::in);
+    if (!file)
+	print_error("Unable to find file: " + filename);
+    std::string line;
+    uint num_verts, num_tris;
+    bool in_header = true;
+    std::vector<float3> verts;
+    while (getline(file, line)){
+	//first get all header info so we know how many verts and tris
+	if (in_header){
+	    if (line.substr(0,14) == "element vertex"){
+		std::istringstream str(line);
+		std::string w;
+		str >> w;
+		str >> w;
+		str >> num_verts;
+	    }
+	    else if (line.substr(0, 12) == "element face"){
+		std::istringstream str(line);
+		std::string w;
+		str >> w;
+		str >> w;
+		str >> num_tris;
+	    }
+	    else if (line.substr(0, 10) == "end_header")
+		in_header = false;
+	}
+	else{ // read all verts
+	    if (num_verts){
+		num_verts--;
+		float x, y, z;
+		std::istringstream str_in(line);
+		str_in >> x >> y >> z;
+		float3 point = {x,y,z};
+		verts.push_back(scale*float3({dot(point,xaxis), dot(point,yaxis), dot(point,zaxis)}) + translate);
+	    }
+	    else if (num_tris){ // once we have all verts, read triangles
+		num_tris--;
+		uint dummy, idx1, idx2, idx3;
+		std::istringstream str(line);
+		str >> dummy >> idx1 >> idx2 >> idx3;
+		float3 v0 = verts[idx1];
+		float3 v1 = verts[idx2];
+		float3 v2 = verts[idx3];
+		triangles.push_back({v0, v1, v2, mat_idx});
+	    }
+	}
+    }
+}
+
 Scene::Scene(std::string filename){
     std::clog << "Reading scene..." << std::endl;
     std::ifstream scene_file(filename, std::ios::in);
@@ -135,6 +197,17 @@ Scene::Scene(std::string filename){
 		load_materials(load_name);
 	    else if (extension == "camera")
 		load_camera(load_name);
+	    else if (extension == "ply"){
+		if (current_material == -1)
+		print_error(filename + ":" + std::to_string(line_num) + ": No material selected");
+		std::string params = str.str().substr(str.str().find(".") + 5);
+	        float3 t,x,y;
+		float s;
+		if (sscanf(params.c_str(), "{%f, %f, %f} %f {%f, %f, %f} {%f, %f, %f}",
+			   &t.x, &t.y, &t.z, &s, &x.x, &x.y, &x.z, &y.x, &y.y, &y.z) != 10)
+		    print_error(filename + ":" + std::to_string(line_num) + ": Incorrect parameters");
+		load_ply(load_name, current_material, t, s, x, y);
+	    }
 	    else
 		print_error(filename + ":" + std::to_string(line_num) + ": Extension not recognized");
 	}

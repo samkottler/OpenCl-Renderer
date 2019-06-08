@@ -83,21 +83,24 @@ void Renderer::render(Scene scene){
     
     
     cl::Buffer out_buf(context, CL_MEM_READ_WRITE, sizeof(float3)*width*height);
-    cl::Buffer triangle_buf(context, CL_MEM_READ_WRITE, sizeof(Triangle)*scene.triangles.size());
+    cl::Buffer bvh_buf(context, CL_MEM_READ_WRITE, sizeof(GPU_BVHnode)*scene.bvh.GPU_BVH.size());
+    cl::Buffer triangle_buf(context, CL_MEM_READ_WRITE, sizeof(Triangle)*scene.bvh.ordered.size());
     cl::Buffer material_buf(context, CL_MEM_READ_WRITE, sizeof(Material)*scene.materials.size());
 
     queue.enqueueWriteBuffer(out_buf, CL_TRUE, 0, output.size()*sizeof(float3), output.data());
-    queue.enqueueWriteBuffer(triangle_buf, CL_TRUE, 0, sizeof(Triangle)*scene.triangles.size(),
-			     scene.triangles.data());
+    queue.enqueueWriteBuffer(bvh_buf, CL_TRUE, 0, sizeof(GPU_BVHnode)*scene.bvh.GPU_BVH.size(),
+			     scene.bvh.GPU_BVH.data());
+    queue.enqueueWriteBuffer(triangle_buf, CL_TRUE, 0, sizeof(Triangle)*scene.bvh.ordered.size(),
+			     scene.bvh.ordered.data());
     queue.enqueueWriteBuffer(material_buf, CL_TRUE, 0, sizeof(Material)*scene.materials.size(),
 			     scene.materials.data());
     
     cl::Kernel kernel = cl::Kernel(program, "render");    
-    cl::make_kernel<cl::Buffer,cl::Buffer, int, cl::Buffer, Camera> render_kernel(kernel);
+    cl::make_kernel<cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, Camera> render_kernel(kernel);
     cl::EnqueueArgs eargs(queue, cl::NullRange, cl::NDRange(width,height), cl::NDRange(8,8));
 
     std::clog << "Starting render..." << std::endl;
-    render_kernel(eargs, out_buf, triangle_buf, scene.triangles.size(), material_buf, scene.camera).wait();
+    render_kernel(eargs, out_buf, bvh_buf, triangle_buf, material_buf, scene.camera).wait();
 
     queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
     

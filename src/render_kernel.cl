@@ -1,4 +1,6 @@
+#include "Box.h"
 #include "Camera.h"
+#include "GPU_BVHnode.h"
 #include "Material.h"
 #include "Ray.h"
 #include "Triangle.h"
@@ -10,6 +12,14 @@ typedef struct _dat{
     float3 normal;
     int mat;
 } HitData;
+
+// return min and max components of a vector
+float3 minf3(float3 a, float3 b){
+    return (float3)(a.x<b.x?a.x:b.x, a.y<b.y?a.y:b.y, a.z<b.z?a.z:b.z);
+}
+float3 maxf3(float3 a, float3 b){
+    return (float3)(a.x>b.x?a.x:b.x, a.y>b.y?a.y:b.y, a.z>b.z?a.z:b.z);
+}
 
 //copied from http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
 uint rand(uint2* state){
@@ -44,15 +54,55 @@ float intersect(Triangle tri, Ray ray){
     return dot(tri.vert2 - tri.vert0, qvec) * det;
 }
 
-bool intersect_scene(global Triangle* triangles, int num_tris, Ray ray, HitData* dat){
+float intersect_box(Box box, Ray ray){
+    if (box.min.x < ray.origin.x && ray.origin.x < box.max.x &&
+	box.min.y < ray.origin.y && ray.origin.y < box.max.y &&
+	box.min.z < ray.origin.z && ray.origin.z < box.max.z) return -1;
+	
+	float3 tmin = (box.min - ray.origin) / ray.direction;
+	float3 tmax = (box.max - ray.origin) / ray.direction;
+
+	float3 rmin = minf3(tmin,tmax);
+	float3 rmax = maxf3(tmin,tmax);
+
+	float minmax = fmin(fmin(rmax.x, rmax.y), rmax.z);
+	float maxmin = fmax(fmax(rmin.x, rmin.y), rmin.z);
+
+	if(minmax >= maxmin) return maxmin > 0.000001 ? maxmin : 0;
+	else return 0;
+}
+
+bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, HitData* dat){
+    int stack[64]; // its reasonable to assume this will be way bigger than neccesary
+    int stack_idx = 1;
+    stack[0] = 0;
+    float d;
     float t = 1e20;
     dat->t = t;
-    float d;
     int id;
-    for (int i = 0; i<num_tris; ++i){
-	if ((d=intersect(triangles[i],ray)) && d<t && d>0){
-	    t=d;
-	    id = i;
+    while(stack_idx){
+	int boxidx = stack[stack_idx - 1]; // pop off top of stack
+	stack_idx --; 
+	if(!(bvh[boxidx].u.leaf.count & 0x80000000)){ // inner
+	    Box b;
+	    b.min = bvh[boxidx].min;
+	    b.max = bvh[boxidx].max;
+	    if (intersect_box(b,ray)){
+		stack[stack_idx++] = bvh[boxidx].u.inner.left; // push right and left onto stack
+		stack[stack_idx++] = bvh[boxidx].u.inner.right;
+	    }
+	} 
+	else{ // leaf
+	    for (int i = bvh[boxidx].u.leaf.offset;
+		 i < bvh[boxidx].u.leaf.offset + (bvh[boxidx].u.leaf.count & 0x7fffffff);
+		 i++){ // intersect all triangles in this box
+		if ((d = intersect(triangles[i],ray)) && d > -1e19){
+		    if(d<t && d>0.001){
+			t=d;
+			id = i;
+		    }
+		}
+	    }
 	}
     }
     if (t<dat->t){
@@ -66,12 +116,12 @@ bool intersect_scene(global Triangle* triangles, int num_tris, Ray ray, HitData*
     return t < 1e19;
 }
 
-float3 trace(global Triangle* triangles, int num_tris, Ray ray, global Material* materials, uint2* rand_state){
+float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, global Material* materials, uint2* rand_state){
     float3 color = (float3)(0.0,0.0,0.0);
     float3 mask = (float3)(1.0,1.0,1.0);
     for (int bounces = 0; bounces < 5; ++bounces){
 	HitData dat;
-	if(intersect_scene(triangles, num_tris, ray, &dat)){
+	if(intersect_scene(bvh, triangles, ray, &dat)){
 	    Material mat = materials[dat.mat];
 	    ray.origin = ray.origin + dat.t*ray.direction + 0.01f*dat.normal;
 	    float theta = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
@@ -94,7 +144,7 @@ float3 trace(global Triangle* triangles, int num_tris, Ray ray, global Material*
     return color;
 }
 
-void kernel render(global float3* image, global Triangle* triangles, int num_tris, global Material* materials, Camera camera){
+void kernel render(global float3* image, global GPU_BVHnode* bvh, global Triangle* triangles, global Material* materials, Camera camera){
     int x = get_global_id(0);
     int y = get_global_id(1);
     int width = get_global_size(0);
@@ -127,8 +177,9 @@ void kernel render(global float3* image, global Triangle* triangles, int num_tri
 	float ys = (float)rand(&rand_state)/(float)RAND_MAX;
 
 	ray.direction = normalize(screen_corner + horiz*(float)(x+xs)/(float)width + vert*(float)(y+ys)/(float)height - ray.origin);
-	
-	color += trace(triangles, num_tris, ray, materials, &rand_state);
+
+
+	color += trace(bvh, triangles, ray, materials, &rand_state);
     }
     
     image[(height-y-1)*width+x] = color/SAMPLES;

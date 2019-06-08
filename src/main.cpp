@@ -83,7 +83,7 @@ int main(int argc, char** argv){
     std::clog << "  Width:     " << width << std::endl;
     std::clog << "  Hieght:    " << height << std::endl;
     std::clog << "  Samples:   " << samples << std::endl;
-    std::clog << "  Triangles: " << scene.triangles.size() << std::endl;
+    std::clog << "  Triangles: " << scene.bvh.ordered.size() << std::endl;
 
     t1 = std::chrono::system_clock::now();
     

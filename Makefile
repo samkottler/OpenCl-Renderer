@@ -6,7 +6,7 @@ CXXFLAGS = -std=gnu++11
 LIBS = -lm -lpng -lpthread -lOpenCL
 BIN = ./bin
 OBJ = ./obj
-objects = main.o Renderer.o Scene.o lodepng.o error.o float3.o
+objects = main.o Renderer.o Scene.o lodepng.o error.o float3.o BVH.o
 OBJS = $(objects:%.o=$(OBJ)/%.o)
 binaries = main
 BINS = $(binaries:%=$(BIN)/%)

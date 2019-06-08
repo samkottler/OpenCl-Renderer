@@ -4,6 +4,7 @@
 #include <sstream>
 #include <ios>
 
+#include "BVH.hpp"
 #include "Camera.h"
 #include "error.hpp"
 #include "float3.h"
@@ -239,4 +240,5 @@ Scene::Scene(std::string filename){
 	    triangles.push_back({verticies[v0],verticies[v1],verticies[v2], current_material});
 	}
     }
+    bvh = BVH(triangles);
 }

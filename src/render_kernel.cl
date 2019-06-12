@@ -5,21 +5,13 @@
 #include "Ray.h"
 #include "Triangle.h"
 
-#define RAND_MAX (0xffffffffU)
+#define RAND_MAX (0x800000U)
 
 typedef struct _dat{
     float t;
     float3 normal;
     int mat;
 } HitData;
-
-// return min and max components of a vector
-float3 minf3(float3 a, float3 b){
-    return (float3)(a.x<b.x?a.x:b.x, a.y<b.y?a.y:b.y, a.z<b.z?a.z:b.z);
-}
-float3 maxf3(float3 a, float3 b){
-    return (float3)(a.x>b.x?a.x:b.x, a.y>b.y?a.y:b.y, a.z>b.z?a.z:b.z);
-}
 
 //copied from http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
 uint rand(uint2* state){
@@ -30,7 +22,118 @@ uint rand(uint2* state){
     x=x*A+c;
     c=hi+(x<c);
     *state=(uint2)(x,c);              // Pack the state back up
-    return res;                       // Return the next result
+    return res&0x7fffff;              // Return the next result
+                                      // modified to not ever get 1
+}
+
+float cosTheta(float3 w){
+    return w.z;
+}
+
+float sinTheta(float3 w){
+    return sqrt(max(0.0, 1.0 - w.z*w.z));
+}
+
+float tanTheta(float3 w){
+    return sinTheta(w)/cosTheta(w);
+}
+
+float Lambda(float3 w, Material mat){
+    float absTanTheta = fabs(tanTheta(w));
+    if (absTanTheta > 1e20) return 0;
+    float a = 1.0/(mat.alpha*absTanTheta);
+    if (a>=1.6)
+	return 0;
+    return (1 - 1.259*a + 0.396*a*a) / (3.535*a + 2.181*a*a);
+}
+
+float G(float3 in, float3 out, Material mat){
+    return 1.0/(1+Lambda(in, mat)+Lambda(out, mat));
+}
+
+/*
+float D(float3 half_angle){
+    float t = tanTheta(half_angle);
+    float c = cosTheta(half_angle);
+    if (ALPHA < 0.001) return (fabs(t) < 0.001)?1:0;
+    float d = exp(-t*t/ALPHA/ALPHA) / (M_PI*ALPHA*ALPHA*c*c*c*c);
+    return d;
+    }*/
+
+float F(){
+    return 1;
+}
+
+float3 global_to_local(float3 normal, float3 vec){
+    float3 z = normal;
+    float3 y = normalize(cross(z,(fabs(z.z - 1) < 0.0001)?(float3)(1,0,0):(float3)(0,0,1)));
+    float3 x = cross(y,z);
+
+    return (float3)(dot(x,vec), dot(y, vec), dot(z,vec));
+}
+
+float3 local_to_global(float3 normal, float3 vec){
+    float3 z = normal;
+    float3 y = normalize(cross(z,(fabs(z.z - 1) < 0.0001)?(float3)(1,0,0):(float3)(0,0,1)));
+    float3 x = cross(y,z);
+
+    float3 a1 = (float3)(x.x, y.x, z.x);
+    float3 a2 = (float3)(x.y, y.y, z.y);
+    float3 a3 = (float3)(x.z, y.z, z.z);
+
+    return (float3)(dot(a1,vec), dot(a2, vec), dot(a3, vec));
+}
+
+float3 get_direction(float3 normal, float3 in, Material mat, float* factor, uint2* rand_state){
+    float3 win = global_to_local(normal, in);
+    float phi = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
+    float xi = (float)(rand(rand_state))/(float)RAND_MAX;
+    if(mat.type == LAMBERTIAN){
+	float costheta = acos(xi)*2/M_PI;
+	float sintheta = sqrt(1-costheta*costheta);
+	*factor = M_PI/2*sqrt(1-xi*xi);
+	return local_to_global(normal, (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta));
+    }
+    else{ // importance sampling based on pbrt
+	float tan2theta = -mat.alpha*mat.alpha*log(xi);
+	float costheta = 1/sqrt(1+tan2theta);
+	float sintheta = sqrt(1-costheta*costheta);
+	
+	float3 w_half = (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta);
+	if (win.z*w_half.z < 0) w_half = -w_half;
+
+	float3 wout = win - 2*w_half*dot(win,w_half);
+
+	*factor = fabs(cosTheta(w_half))/4/dot(win,w_half);
+	
+	return local_to_global(normal, wout);
+    }
+}
+
+float3 color_at(float3 in, float3 out, float3 normal, Material mat, float factor){    
+    float3 win = -global_to_local(normal, in);
+    float3 wout = global_to_local(normal, out);
+
+    float brdf = 1;
+    if (mat.type == LAMBERTIAN)
+	brdf = cosTheta(wout)/factor;
+    else if(mat.type == COOK_TORRANCE){
+	float cout = cosTheta(wout);
+	float cin = cosTheta(win);
+	if (cout < 0.05 || cin < 0.05)
+	    brdf = 0;
+	else
+	    brdf = G(win, wout, mat)*F()/4/cout/cin/factor;
+    }
+    return mat.color*brdf;
+}
+
+// return min and max components of a vector
+float3 minf3(float3 a, float3 b){
+    return (float3)(a.x<b.x?a.x:b.x, a.y<b.y?a.y:b.y, a.z<b.z?a.z:b.z);
+}
+float3 maxf3(float3 a, float3 b){
+    return (float3)(a.x>b.x?a.x:b.x, a.y>b.y?a.y:b.y, a.z>b.z?a.z:b.z);
 }
 
 float intersect(Triangle tri, Ray ray){
@@ -124,16 +227,12 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
 	if(intersect_scene(bvh, triangles, ray, &dat)){
 	    Material mat = materials[dat.mat];
 	    ray.origin = ray.origin + dat.t*ray.direction + 0.01f*dat.normal;
-	    float theta = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
-	    float cosphi = ((float)rand(rand_state)/(float)RAND_MAX);
-	    float sinphi = sqrt(1-cosphi*cosphi);
-	   
-	    float3 w = dat.normal;
-	    float3 u = normalize(cross(fabs(w.x)>0.0001?(float3)(0,1,0):(float3)(1,0,0),w));
-	    float3 v = cross(w,u);
-	    ray.direction = normalize(u*cos(theta)*sinphi + v*sin(theta)*sinphi + w*cosphi);
+
+	    float factor;
+	    float3 new_direction = get_direction(dat.normal, ray.direction, mat, &factor, rand_state);
 	    color += mask*mat.emission;
-	    mask = mask*mat.color;
+	    mask = mask*color_at(ray.direction, new_direction, dat.normal, mat, factor);
+	    ray.direction = new_direction;
 	}
 	else{
 	    float t = (ray.direction.y + 1)/2;

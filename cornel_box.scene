@@ -24,7 +24,8 @@ f 7 3 2
 f 5 1 3
 f 3 7 5
 
-load data/bun_zipper.ply {0.2, -1.2, 0} 8 {1, 0, 0} {0, 1, 0}
+#m bunny
+#load data/bun_zipper_res4.ply {0.2, -1.2, 0} 8 {1, 0, 0} {0, 1, 0}
 
 m red
 f 1 0 2

@@ -20,6 +20,8 @@ void Scene::load_materials(std::string filename){
     std::string mat_name;
     float3 color = {0,0,0};
     float3 emission = {0,0,0};
+    BRDF brdf = LAMBERTIAN;
+    float alpha;
     while (getline(material_file, line)){
 	line_num++;
 	std::istringstream str(line);
@@ -53,11 +55,31 @@ void Scene::load_materials(std::string filename){
 		print_error(filename + ":" + std::to_string(line_num) + ": Unable to create emission");
 	    emission = {r,g,b};
 	}
+	if (type == "t"){
+	    if (mat_name == "")
+		print_error(filename + ":" + std::to_string(line_num) + ": No material defined");
+	    std::string brdfstr;
+	    str >> brdfstr;
+	    if (brdfstr == "lambertian")
+		brdf = LAMBERTIAN;
+	    else if (brdfstr == "cook-torrance")
+		brdf = COOK_TORRANCE;
+	    else
+		print_error(filename + ":" + std::to_string(line_num) + ": Couldn't understand brdf type");
+	}
+	if (type == "a"){
+	    if (mat_name == "")
+                print_error(filename + ":" + std::to_string(line_num) + ": No material defined");
+	    alpha = -1e20;
+	    str >> alpha;
+	    if(alpha < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": No alpha given");
+	}
 	if (type == "done"){
 	    if (mat_name == "")
 		print_error(filename + ":" + std::to_string(line_num) + ": No material to end");
 	    material_idx[mat_name] = materials.size();
-	    materials.push_back({color, emission});
+	    materials.push_back({color, emission, brdf, alpha});
 	}
     }
 }

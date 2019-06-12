@@ -1,19 +1,31 @@
 material white
 c 0.9 0.9 0.9
 e 0   0   0
+t lambertian
 done
 
 material red
 c 0.9 0.1 0.1
 e 0   0   0
+t cook-torrance
+a 0.01
 done
 
 material green
 c 0.1 0.9 0.1
 e 0   0   0
+t lambertian
+a 1.414
+done
+
+material bunny
+c 0.9 0.9 0.9
+e 0   0   0
+t cook-torrance
 done
 
 material light
 c 1   1   1
-e 10  10  10
+e 40  40  40
+lambertian
 done

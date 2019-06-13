@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <random>
 #include <streambuf>
@@ -49,7 +50,7 @@ void Renderer::create_from_file_and_build(std::string kernel_filename){
     cl::Program::Sources sources;
     sources.push_back({source.c_str(), source.length()});
     program = cl::Program(context, sources);
-    std::string flags = "-I src -DSAMPLES=" + std::to_string(samples);
+    std::string flags = "-I src";
     if (program.build({device}, flags.c_str()) != CL_SUCCESS){
 	print_error(program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device));
     }
@@ -102,25 +103,21 @@ void Renderer::bloom(){
 
 void Renderer::render(Scene scene){
     output = std::vector<float3>(width*height);
+    std::vector<cl_uint2> seeds = std::vector<cl_uint2>(width*height);
     std::default_random_engine rand_gen;
-    for (int i = 0; i< output.size(); ++i){
-	union {
-	    int val;
-	    float f;
-	} u;
-	u.val = rand_gen();
-	output[i].x = u.f;
-	u.val = rand_gen();
-	output[i].y = u.f;
+    for (int i = 0; i< seeds.size(); ++i){
+	seeds[i].x = rand_gen();
+	seeds[i].y = rand_gen();
     }
-    
     
     cl::Buffer out_buf(context, CL_MEM_READ_WRITE, sizeof(float3)*width*height);
     cl::Buffer bvh_buf(context, CL_MEM_READ_WRITE, sizeof(GPU_BVHnode)*scene.bvh.GPU_BVH.size());
     cl::Buffer triangle_buf(context, CL_MEM_READ_WRITE, sizeof(Triangle)*scene.bvh.ordered.size());
     cl::Buffer material_buf(context, CL_MEM_READ_WRITE, sizeof(Material)*scene.materials.size());
+    cl::Buffer seed_buf(context, CL_MEM_READ_WRITE, sizeof(cl_uint2)*width*height);
 
     queue.enqueueWriteBuffer(out_buf, CL_TRUE, 0, output.size()*sizeof(float3), output.data());
+    queue.enqueueWriteBuffer(seed_buf, CL_TRUE, 0, seeds.size()*sizeof(cl_uint2), seeds.data());
     queue.enqueueWriteBuffer(bvh_buf, CL_TRUE, 0, sizeof(GPU_BVHnode)*scene.bvh.GPU_BVH.size(),
 			     scene.bvh.GPU_BVH.data());
     queue.enqueueWriteBuffer(triangle_buf, CL_TRUE, 0, sizeof(Triangle)*scene.bvh.ordered.size(),
@@ -129,13 +126,30 @@ void Renderer::render(Scene scene){
 			     scene.materials.data());
     
     cl::Kernel kernel = cl::Kernel(program, "render");    
-    cl::make_kernel<cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, Camera> render_kernel(kernel);
+    cl::make_kernel<cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, Camera, int> render_kernel(kernel);
     cl::EnqueueArgs eargs(queue, cl::NullRange, cl::NDRange(width,height), cl::NDRange(8,8));
 
     std::clog << "Starting render..." << std::endl;
-    render_kernel(eargs, out_buf, bvh_buf, triangle_buf, material_buf, scene.camera).wait();
+
+    int samples_done = 0;
+
+    std::streamsize ss = std::clog.precision();
+    while(samples_done+32 < samples){
+	render_kernel(eargs, out_buf, seed_buf, bvh_buf, triangle_buf, material_buf, scene.camera, 32).wait();
+	samples_done+=32;
+	std::clog << "Progress: " << std::fixed << std::setprecision(1) << (100.0*samples_done/samples) << "%\r" << std::flush;
+    }
+    std::clog.unsetf(std::ios::fixed);
+    std::clog.precision(ss);
+    std::clog << "Progress:  100%" << std::endl;
+    if (samples_done < samples)	
+	render_kernel(eargs, out_buf, seed_buf, bvh_buf, triangle_buf, material_buf, scene.camera, samples - samples_done).wait();
 
     queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
+
+    for (int i = 0; i< output.size(); ++i){
+	output[i] = (1.0)/samples * output[i];
+    }
 }
 
 void Renderer::save_image(std::string filename){

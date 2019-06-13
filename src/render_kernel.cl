@@ -243,12 +243,12 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
     return color;
 }
 
-void kernel render(global float3* image, global GPU_BVHnode* bvh, global Triangle* triangles, global Material* materials, Camera camera){
+void kernel render(global float3* image, global uint2* seeds, global GPU_BVHnode* bvh, global Triangle* triangles, global Material* materials, Camera camera, int samples){
     int x = get_global_id(0);
     int y = get_global_id(1);
     int width = get_global_size(0);
     int height = get_global_size(1);
-    uint2 rand_state = (uint2)(as_uint(image[(height-y-1)*width+x].x),as_uint(image[(height-y-1)*width+x].y));
+    uint2 rand_state = seeds[(height-y-1)*width+x];
     rand(&rand_state);
     
     //camera space unit basis vectors
@@ -265,7 +265,7 @@ void kernel render(global float3* image, global GPU_BVHnode* bvh, global Triangl
     float3 vert = 2*screen_height*focal_length*v;
 
     float3 color = (float3)(0,0,0);
-    for (int sample = 0; sample < SAMPLES; ++sample){
+    for (int sample = 0; sample < samples; ++sample){
 	Ray ray;
 	
 	float theta = 2*M_PI*(float)rand(&rand_state)/(float)RAND_MAX;
@@ -281,5 +281,7 @@ void kernel render(global float3* image, global GPU_BVHnode* bvh, global Triangl
 	color += trace(bvh, triangles, ray, materials, &rand_state);
     }
     
-    image[(height-y-1)*width+x] = color/SAMPLES;
+    image[(height-y-1)*width+x] += color;
+    seeds[(height-y-1)*width+x] = rand_state;
+    
 }

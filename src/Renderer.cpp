@@ -58,17 +58,50 @@ void Renderer::create_from_file_and_build(std::string kernel_filename){
     queue = cl::CommandQueue(context, device);
 }
 
-Renderer::Renderer(std::string kernel_filename, int w, int h, int s) : width(w), height(h), samples(s){
+Renderer::Renderer(std::string kernel_filename, int w, int h, int s, int r) : width(w), height(h), samples(s), bloom_rad(r){
     std::clog << "Initializing OpenCL..." << std::endl;
     get_platform();
     get_device();
     context = cl::Context({device});
     create_from_file_and_build(kernel_filename);
-    image = std::vector<unsigned char>(width*height*4);
+}
+
+void Renderer::bloom(){
+    float stddev = 5.0/512*width;
+    float kernel[(2*bloom_rad+1)*(2*bloom_rad+1)];
+    float denom = 2*stddev*stddev;
+    for (int y = -bloom_rad; y<=bloom_rad; y++){
+	for (int x = -bloom_rad; x<=bloom_rad; x++){
+	    kernel[(y+bloom_rad)*(2*bloom_rad+1)+x+bloom_rad] = exp(-(x*x+y*y)/denom)/denom/M_PI;
+	}
+    }
+    std::vector<float3> temp(width*height);
+    for (int i = 0; i<width*height; i++){
+	float r,g,b;
+	r=g=b=0;
+	if (output[i].x > 1) r = output[i].x - 1;
+	if (output[i].y > 1) g = output[i].y - 1;
+	if (output[i].z > 1) b = output[i].z - 1;
+        temp[i] = {r,g,b};
+    }
+    for (int y = 0; y<height; y++){
+	for(int x = 0; x<width; x++){
+	    float3 c = {0,0,0};
+	    for (int ky = -bloom_rad; ky<=bloom_rad; ky++){
+		for (int kx = -bloom_rad; kx<=bloom_rad; kx++){
+		    if ((y+ky)>=0 && (y+ky)<height &&
+			(x+kx)>=0 && (x+kx)<width){
+			c = c+kernel[(ky+bloom_rad)*(2*bloom_rad+1)+kx+bloom_rad]*temp[(y+ky)*width+(x+kx)];
+		    }
+		}
+	    }
+	    output[y*width+x] = (1.0f/20)*c + output[y*width + x];
+	}
+    }
 }
 
 void Renderer::render(Scene scene){
-    std::vector<float3> output(width*height);
+    output = std::vector<float3>(width*height);
     std::default_random_engine rand_gen;
     for (int i = 0; i< output.size(); ++i){
 	union {
@@ -103,17 +136,21 @@ void Renderer::render(Scene scene){
     render_kernel(eargs, out_buf, bvh_buf, triangle_buf, material_buf, scene.camera).wait();
 
     queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
-    
+}
+
+void Renderer::save_image(std::string filename){
+    std::clog << "Saving image ..." << std::endl;
+
+    bloom();
+
+    std::vector<unsigned char> image = std::vector<unsigned char>(width*height*4);
     for (int i = 0; i < width*height; ++i){
 	image[4*i + 0] = to_int(output[i].x);
 	image[4*i + 1] = to_int(output[i].y);
 	image[4*i + 2] = to_int(output[i].z);
 	image[4*i + 3] = 255;
     }
-}
-
-void Renderer::save_image(std::string filename){
-    std::clog << "Saving image ..." << std::endl;
+    
     lodepng::encode(filename, image, width, height);
 }
 

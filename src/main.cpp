@@ -14,6 +14,7 @@ void usage(std::string executable){
     std::cout << "  -h                  Display this message." << std::endl;
     std::cout << "  -o <file>           Save the output image to <file>." << std::endl;
     std::cout << "  -p <num>            Trace a maximum of <num> paths for each pixel." << std::endl;
+    std::cout << "  -r <radius>         Apply bloom of radius <radius>." << std::endl;
     std::cout << "  -s <width>x<height> Output an image with the given resolution." << std::endl;
     exit(0);
 }
@@ -24,6 +25,7 @@ int main(int argc, char** argv){
     int samples = 100;
     int width = 512;
     int height = 384;
+    int radius = 1;
     for (int i = 1; i< argc; ++i){
 	if (strcmp(argv[i], "-o") == 0){
 	    if (i+1 < argc){
@@ -58,6 +60,16 @@ int main(int argc, char** argv){
 		usage(argv[0]);
 	    }
 	}
+	if (strcmp(argv[i], "-r") == 0){
+	    if(i+1 < argc){
+		radius = atoi(argv[i+1]);
+		++i;
+	    }
+	    else{
+		std::cout << "No radius specified" << std::endl;
+		usage(argv[0]);
+	    }
+	}
 	if (strcmp(argv[i], "-s") == 0){
 	    if (i+1 < argc){
 		std::string res(argv[i+1]);
@@ -78,7 +90,7 @@ int main(int argc, char** argv){
     t0 = std::chrono::system_clock::now();
 
     Scene scene(scene_file);
-    Renderer renderer("src/render_kernel.cl", width, height, samples);
+    Renderer renderer("src/render_kernel.cl", width, height, samples, radius);
     std::clog << "Image info:" << std::endl;
     std::clog << "  Width:     " << width << std::endl;
     std::clog << "  Hieght:    " << height << std::endl;

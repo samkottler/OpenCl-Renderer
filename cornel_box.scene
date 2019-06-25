@@ -27,6 +27,10 @@ f 3 7 5
 #m bunny
 #load data/bun_zipper.ply {0.2, -1.2, 0} 8 {1, 0, 0} {0, 1, 0}
 
+m glass
+load data/happy_vrip_res4.ply {0, -1.35, 0} 8 {1, 0, 0} {0, 1, 0}
+#load data/sphere.ply {0, -0, 0} 0.2 {1, 0, 0} {0, 0, -1}
+
 m red
 f 1 0 2
 f 2 3 1

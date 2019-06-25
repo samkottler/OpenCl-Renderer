@@ -60,8 +60,16 @@ float D(float3 half_angle){
     return d;
     }*/
 
-float F(){
-    return 1;
+float F(float etaI, float etaT, float cosThetaI){
+    float sinThetaI = sqrt(1-cosThetaI*cosThetaI);
+    float sinThetaT = etaI/etaT*sinThetaI;
+    //printf("%f\n", etaT);
+    if (sinThetaT >= 1)
+	return 1;
+    float cosThetaT = sqrt(1-sinThetaT*sinThetaT);
+    float r_parallel = ((etaT*cosThetaI) - (etaI*cosThetaT)) / ((etaT*cosThetaI) + (etaI*cosThetaT));
+    float r_perpendicular = ((etaT*cosThetaI) - (etaI*cosThetaT)) / ((etaT*cosThetaI) + (etaI*cosThetaT));
+    return (r_parallel*r_parallel + r_perpendicular*r_perpendicular) / 2;
 }
 
 float3 global_to_local(float3 normal, float3 vec){
@@ -84,8 +92,31 @@ float3 local_to_global(float3 normal, float3 vec){
     return (float3)(dot(a1,vec), dot(a2, vec), dot(a3, vec));
 }
 
-float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2* rand_state){
+float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2* rand_state, int* transmitted, Material current){
     float3 win = -global_to_local(normal, in);
+    float ref_type = (float)(rand(rand_state))/(float)RAND_MAX;
+    float etaI;
+    float etaT;
+    float3 nl;
+    if (win.z < 0){ // leaving
+	nl = (float3)(0,0,-1);
+	etaI = mat.ref_idx;
+	etaT = current.ref_idx;
+    }
+    else{ // entering
+	nl = (float3)(0,0,1);
+	etaI = current.ref_idx;
+	etaT = mat.ref_idx;
+    }
+    if (ref_type > F(etaI, etaT, fabs(cosTheta(win)))){
+	*transmitted = 1;
+	*bxdf = 1;
+	float dt = fabs(cosTheta(win));
+	float ratio = etaI/etaT;	
+	float disc = 1.0 - ratio*ratio*(1-dt*dt);
+	float3 refracted = ratio*(-win + dt*nl) - sqrt(disc)*nl;
+	return local_to_global(normal, refracted);
+    }
     float phi = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
     float xi = (float)(rand(rand_state))/(float)RAND_MAX;
     if(mat.type == LAMBERTIAN){
@@ -109,8 +140,9 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
 	if( cout < 0.05 || cin < 0.05)
 	    *bxdf = 0;
 	else
-	    *bxdf = G(win, wout, mat)*F()/cout/cin/fabs(cosTheta(w_half))*dot(win,w_half);
-	
+	    *bxdf = G(win, wout, mat)/cout/cin/fabs(cosTheta(w_half))*dot(win,w_half);
+
+        //if (cout*cin < 0.1) printf("%f\n", *bxdf);
 	return local_to_global(normal, wout);
     }
 }
@@ -209,14 +241,36 @@ bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ra
 float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, global Material* materials, uint2* rand_state){
     float3 color = (float3)(0.0,0.0,0.0);
     float3 mask = (float3)(1.0,1.0,1.0);
-    for (int bounces = 0; bounces < 5; ++bounces){
+    Material stack[10];
+    int stack_idx = 0;
+    stack[0].ref_idx = 1;
+    stack[0].attenuation = (float3)(1, 1, 1);
+    for (int bounces = 0; bounces < 10; ++bounces){
 	HitData dat;
 	if(intersect_scene(bvh, triangles, ray, &dat)){
 	    Material mat = materials[dat.mat];
-	    ray.origin = ray.origin + dat.t*ray.direction + 0.01f*dat.normal;
+	    ray.origin = ray.origin + dat.t*ray.direction;
 
+	    float3 atten = stack[stack_idx].attenuation;
+	    
 	    float bxdf;
-	    float3 new_direction = get_direction(dat.normal, ray.direction, mat, &bxdf, rand_state);
+	    int transmitted = 0;
+	    float3 new_direction = get_direction(dat.normal, ray.direction, mat, &bxdf, rand_state, &transmitted, stack[stack_idx]);
+
+	    if (transmitted){
+		if (dot(dat.normal, ray.direction) < 0)
+		    stack[++stack_idx] = mat;
+		else
+		    stack_idx--;
+	    }
+	    else if (dot(dat.normal, ray.direction) < 0)
+	    	ray.origin += 0.01f*dat.normal;
+	    
+	    float r = exp(-20*(1-atten.x)*dat.t);
+	    float g = exp(-20*(1-atten.y)*dat.t);
+	    float b = exp(-20*(1-atten.z)*dat.t);
+	    mask = mask*(float3)(r,g,b);
+	    
 	    color += mask*mat.emission;
 	    mask = mask*mat.color*bxdf;
 	    ray.direction = new_direction;
@@ -225,6 +279,7 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
 	    float t = (ray.direction.y + 1)/2;
 	    return color + mask*((float3)(1,1,1)*(1-t) + (float3)(0.5,0.7,1)*t);
 	}
+	if (mask.x + mask.y + mask.z < 0.01) break;
     }
 
     return color;

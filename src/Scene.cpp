@@ -22,6 +22,8 @@ void Scene::load_materials(std::string filename){
     float3 emission = {0,0,0};
     BRDF brdf = LAMBERTIAN;
     float alpha;
+    float idx = 0;
+    float3 attenuation = {0,0,0};
     while (getline(material_file, line)){
 	line_num++;
 	std::istringstream str(line);
@@ -32,6 +34,7 @@ void Scene::load_materials(std::string filename){
 	    if (mat_name == ""){
 		print_error(filename + ":" + std::to_string(line_num) + ": Material has no name");
 	    }
+	    idx = 0;
 	}
 	if (type == "c"){
 	    if (mat_name == "")
@@ -75,11 +78,30 @@ void Scene::load_materials(std::string filename){
 	    if(alpha < -1e19)
 		print_error(filename + ":" + std::to_string(line_num) + ": No alpha given");
 	}
+	if (type == "at"){
+	    if (mat_name == "")
+		print_error(filename + ":" + std::to_string(line_num) + ": No material defined");
+	    float r,g,b = -1e20;
+	    str >> r;
+	    str >> g;
+	    str >> b;
+	    if (b < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": Unable to create attenuation");
+	    attenuation = {r,g,b};
+	}
+	if (type == "ri"){
+	    if (mat_name == "")
+                print_error(filename + ":" + std::to_string(line_num) + ": No material defined");
+	    idx = -1e20;
+	    str >> idx;
+	    if(idx < -1e19)
+		print_error(filename + ":" + std::to_string(line_num) + ": No refraction index given");
+	}
 	if (type == "done"){
 	    if (mat_name == "")
 		print_error(filename + ":" + std::to_string(line_num) + ": No material to end");
 	    material_idx[mat_name] = materials.size();
-	    materials.push_back({color, emission, brdf, alpha});
+	    materials.push_back({color, emission, brdf, alpha, idx, attenuation});
 	}
     }
 }

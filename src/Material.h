@@ -4,7 +4,7 @@
 
 typedef enum _BRDF{
 	   LAMBERTIAN,
-	   COOK_TORRANCE
+	   COOK_TORRANCE	   
 } BRDF;
 
 typedef struct _mat{
@@ -12,4 +12,6 @@ typedef struct _mat{
     float3 emission;
     BRDF type;
     float alpha;
+    float ref_idx;
+    float3 attenuation;
 } Material;

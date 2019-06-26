@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -134,14 +135,22 @@ void Renderer::render(Scene scene){
     int samples_done = 0;
 
     std::streamsize ss = std::clog.precision();
+    std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
     while(samples_done+32 < samples){
 	render_kernel(eargs, out_buf, seed_buf, bvh_buf, triangle_buf, material_buf, scene.camera, 32).wait();
 	samples_done+=32;
-	std::clog << "Progress: " << std::fixed << std::setprecision(1) << (100.0*samples_done/samples) << "%\r" << std::flush;
+	double percent = (double)samples_done/samples;
+	std::chrono::duration<double> time = std::chrono::system_clock::now() - start;
+	double seconds = time.count()*(1/percent - 1);
+	int minutes = seconds/60;
+	int hours = minutes/60;
+	seconds -= 60*minutes;
+	minutes -= 60*hours;
+	std::clog << "Progress: " << std::fixed << std::setprecision(1) << 100*percent << "% Time remaining: " << hours << "h" << minutes << "m" << seconds << "s                     \r" << std::flush;
     }
     std::clog.unsetf(std::ios::fixed);
     std::clog.precision(ss);
-    std::clog << "Progress:  100%" << std::endl;
+    std::clog << "Progress:  100% Time remaining: 0h0m0.0s      " << std::endl;
     if (samples_done < samples)	
 	render_kernel(eargs, out_buf, seed_buf, bvh_buf, triangle_buf, material_buf, scene.camera, samples - samples_done).wait();
 

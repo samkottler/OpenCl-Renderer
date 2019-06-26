@@ -28,7 +28,7 @@ f 3 7 5
 #load data/bun_zipper.ply {0.2, -1.2, 0} 8 {1, 0, 0} {0, 1, 0}
 
 m glass
-load data/happy_vrip.ply {0, -1.35, 0} 8 {1, 0, 0} {0, 1, 0}
+load data/happy_vrip_res4.ply {0, -1.4, 0} 8 {1, 0, 0} {0, 1, 0}
 #load data/sphere.ply {0.6, -0.6, 0} 0.2 {1, 0, 0} {0, 0, -1}
 
 m mirror

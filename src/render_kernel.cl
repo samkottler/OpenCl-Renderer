@@ -267,9 +267,9 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
 	    else if (dot(dat.normal, ray.direction) < 0)
 	    	ray.origin += 0.01f*dat.normal;
 	    
-	    float r = exp(-20*(1-atten.x)*dat.t);
-	    float g = exp(-20*(1-atten.y)*dat.t);
-	    float b = exp(-20*(1-atten.z)*dat.t);
+	    float r = exp(-15*(1-atten.x)*dat.t);
+	    float g = exp(-15*(1-atten.y)*dat.t);
+	    float b = exp(-15*(1-atten.z)*dat.t);
 	    mask = mask*(float3)(r,g,b);
 	    
 	    color += mask*mat.emission;

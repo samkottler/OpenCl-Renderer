@@ -122,7 +122,7 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
     if(mat.type == LAMBERTIAN){
 	float costheta = acos(xi)*2/M_PI;
 	float sintheta = sqrt(1-costheta*costheta);
-	*bxdf = costheta/M_PI*2/sqrt(1-xi*xi);
+	*bxdf = costheta*costheta/M_PI*2/sqrt(1-xi*xi);
 	return local_to_global(normal, (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta));
     }
     else{ // importance sampling based on pbrt
@@ -137,12 +137,13 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
 
 	float cout = cosTheta(wout);
 	float cin = cosTheta(win);
-	if( cout < 0.05 || cin < 0.05)
+	if( (cout * cin) < 0.05){
 	    *bxdf = 0;
+	    //printf("%f %f\n", G(win, wout, mat), dot(win,w_half));
+	}
 	else
-	    *bxdf = G(win, wout, mat)/cout/cin/fabs(cosTheta(w_half))*dot(win,w_half);
+	    *bxdf = G(win, wout, mat)/cin/fabs(cosTheta(w_half))*dot(win,w_half);
 
-        //if (cout*cin < 0.1) printf("%f\n", *bxdf);
 	return local_to_global(normal, wout);
     }
 }

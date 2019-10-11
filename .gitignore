@@ -3,3 +3,6 @@ obj/*
 *.png
 data/*
 images/*
+scenes/*
+!data/sphere.ply
+!samples/*

@@ -12,6 +12,9 @@
 #include "float3.h"
 #include "Scene.hpp"
 #include "Material.h"
+#include "tinyply.h"
+
+namespace tp = tinyply;
 
 void Scene::load_materials(std::string filename){
     std::ifstream material_file(filename, std::ios::in);
@@ -170,54 +173,32 @@ void Scene::load_ply(std::string filename, int mat_idx, float3 translate, float 
     xaxis.y = yaxis.x;
     yaxis.x = temp;
 
-    std::ifstream file(filename, std::ios::in);
+    std::ifstream file(filename, std::ios::binary);
     if (!file)
         print_error("Unable to find file: " + filename);
-    std::string line;
-    uint num_verts, num_tris;
-    bool in_header = true;
+
+    tp::PlyFile pfile;
+    pfile.parse_header(file);
+
+    std::shared_ptr<tp::PlyData> verticies, faces;
+    verticies = pfile.request_properties_from_element("vertex", {"x","y","z"});
+    faces = pfile.request_properties_from_element("face", {"vertex_indices"});
+
+    pfile.read(file);
+    float* v = (float*)verticies->buffer.get();
+    uint* f = (uint*)faces->buffer.get();
     std::vector<float3> verts;
-    while (getline(file, line)){
-        //first get all header info so we know how many verts and tris
-        if (in_header){
-            if (line.substr(0,14) == "element vertex"){
-                std::istringstream str(line);
-                std::string w;
-                str >> w;
-                str >> w;
-                str >> num_verts;
-            }
-            else if (line.substr(0, 12) == "element face"){
-                std::istringstream str(line);
-                std::string w;
-                str >> w;
-                str >> w;
-                str >> num_tris;
-            }
-            else if (line.substr(0, 10) == "end_header")
-                in_header = false;
-        }
-        else{ // read all verts
-            if (num_verts){
-                num_verts--;
-                float x, y, z;
-                std::istringstream str_in(line);
-                str_in >> x >> y >> z;
-                float3 point = {x,y,z};
-                verts.push_back(scale*float3({dot(point,xaxis), dot(point,yaxis), dot(point,zaxis)}) + translate);
-            }
-            else if (num_tris){ // once we have all verts, read triangles
-                num_tris--;
-                uint dummy, idx1, idx2, idx3;
-                std::istringstream str(line);
-                str >> dummy >> idx1 >> idx2 >> idx3;
-                float3 v0 = verts[idx1];
-                float3 v1 = verts[idx2];
-                float3 v2 = verts[idx3];
-                triangles.push_back({v0, v1, v2, mat_idx});
-            }
-        }
+    for (int i = 0; i<verticies->count*3; i+=3){
+        float3 point = {v[i],v[i+1],v[i+2]};
+        verts.push_back(scale*float3({dot(point,xaxis), dot(point,yaxis), dot(point,zaxis)}) + translate);
     }
+    for (int i = 0; i<faces->count*3 ; i+=3){
+        float3 v0 = verts[f[i]];
+        float3 v1 = verts[f[i+1]];
+        float3 v2 = verts[f[i+2]];
+        triangles.push_back({v0, v1, v2, mat_idx});
+    }
+    file.close();
 }
 
 Scene::Scene(std::string filename){

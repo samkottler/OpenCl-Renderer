@@ -52,7 +52,10 @@ void Renderer::create_from_file_and_build(std::string kernel_filename){
     sources.push_back({source.c_str(), source.length()});
     program = cl::Program(context, sources);
     std::string flags = "-I src";
-    if (program.build({device}, flags.c_str()) != CL_SUCCESS){
+    int result = program.build({device}, flags.c_str());
+    if (result != CL_SUCCESS){
+        if (result == CL_OUT_OF_HOST_MEMORY)
+            std::cout << "out pf host memory"<<std::endl;
 	print_error(program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device));
     }
     else
@@ -102,7 +105,7 @@ void Renderer::bloom(){
     }
 }
 
-void Renderer::render(Scene scene){
+void Renderer::render(Scene& scene){
     output = std::vector<float3>(width*height);
     std::vector<cl_uint2> seeds = std::vector<cl_uint2>(width*height);
     std::default_random_engine rand_gen;
@@ -110,7 +113,7 @@ void Renderer::render(Scene scene){
 	seeds[i].x = rand_gen();
 	seeds[i].y = rand_gen();
     }
-    
+
     cl::Buffer out_buf(context, CL_MEM_READ_WRITE, sizeof(float3)*width*height);
     cl::Buffer bvh_buf(context, CL_MEM_READ_WRITE, sizeof(GPU_BVHnode)*scene.bvh.GPU_BVH.size());
     cl::Buffer triangle_buf(context, CL_MEM_READ_WRITE, sizeof(Triangle)*scene.bvh.ordered.size());
@@ -125,8 +128,8 @@ void Renderer::render(Scene scene){
 			     scene.bvh.ordered.data());
     queue.enqueueWriteBuffer(material_buf, CL_TRUE, 0, sizeof(Material)*scene.materials.size(),
 			     scene.materials.data());
-    
-    cl::Kernel kernel = cl::Kernel(program, "render");    
+
+    cl::Kernel kernel = cl::Kernel(program, "render");
     cl::make_kernel<cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, cl::Buffer, Camera, int> render_kernel(kernel);
     cl::EnqueueArgs eargs(queue, cl::NullRange, cl::NDRange(width,height), cl::NDRange(8,8));
 
@@ -151,7 +154,7 @@ void Renderer::render(Scene scene){
     std::clog.unsetf(std::ios::fixed);
     std::clog.precision(ss);
     std::clog << "Progress:  100% Time remaining: 0h0m0.0s      " << std::endl;
-    if (samples_done < samples)	
+    if (samples_done < samples)
 	render_kernel(eargs, out_buf, seed_buf, bvh_buf, triangle_buf, material_buf, scene.camera, samples - samples_done).wait();
 
     queue.enqueueReadBuffer(out_buf, CL_TRUE, 0, sizeof(float3)*width*height, output.data());
@@ -173,8 +176,6 @@ void Renderer::save_image(std::string filename){
 	image[4*i + 2] = to_int(output[i].z);
 	image[4*i + 3] = 255;
     }
-    
+
     lodepng::encode(filename, image, width, height);
 }
-
-

@@ -25,6 +25,6 @@ private:
     const int bloom_rad;
 public:
     Renderer(std::string kernel_filename, int width, int height, int samples, int radius);
-    void render(Scene scene);
+    void render(Scene& scene);
     void save_image(std::string filename);
 };

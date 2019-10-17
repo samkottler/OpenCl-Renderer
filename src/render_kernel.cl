@@ -112,7 +112,7 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
 	*transmitted = 1;
 	*bxdf = 1;
 	float dt = fabs(cosTheta(win));
-	float ratio = etaI/etaT;	
+	float ratio = etaI/etaT;
 	float disc = 1.0 - ratio*ratio*(1-dt*dt);
 	float3 refracted = ratio*(-win + dt*nl) - sqrt(disc)*nl;
 	return local_to_global(normal, refracted);
@@ -129,7 +129,7 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
 	float tan2theta = -mat.alpha*mat.alpha*log(xi);
 	float costheta = 1/sqrt(1+tan2theta);
 	float sintheta = sqrt(1-costheta*costheta);
-	
+
 	float3 w_half = (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta);
 	if (win.z*w_half.z < 0) w_half = -w_half;
 
@@ -160,7 +160,7 @@ float intersect(Triangle tri, Ray ray){
     float3 tvec = ray.origin - tri.vert0;
     float3 pvec = cross(ray.direction, tri.vert2 - tri.vert0);
     float det = dot(tri.vert1 - tri.vert0, pvec);
-        
+
     det = native_divide(1.0f,det);
 
     float u = dot(tvec, pvec)*det;
@@ -181,7 +181,7 @@ float intersect_box(Box box, Ray ray){
     if (box.min.x < ray.origin.x && ray.origin.x < box.max.x &&
 	box.min.y < ray.origin.y && ray.origin.y < box.max.y &&
 	box.min.z < ray.origin.z && ray.origin.z < box.max.z) return -1;
-	
+
 	float3 tmin = (box.min - ray.origin) / ray.direction;
 	float3 tmax = (box.max - ray.origin) / ray.direction;
 
@@ -205,7 +205,7 @@ bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ra
     int id;
     while(stack_idx){
 	int boxidx = stack[stack_idx - 1]; // pop off top of stack
-	stack_idx --; 
+	stack_idx --;
 	if(!(bvh[boxidx].u.leaf.count & 0x80000000)){ // inner
 	    Box b;
 	    b.min = bvh[boxidx].min;
@@ -214,7 +214,7 @@ bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ra
 		stack[stack_idx++] = bvh[boxidx].u.inner.left; // push right and left onto stack
 		stack[stack_idx++] = bvh[boxidx].u.inner.right;
 	    }
-	} 
+	}
 	else{ // leaf
 	    for (int i = bvh[boxidx].u.leaf.offset;
 		 i < bvh[boxidx].u.leaf.offset + (bvh[boxidx].u.leaf.count & 0x7fffffff);
@@ -245,7 +245,7 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
     Material stack[10];
     int stack_idx = 0;
     stack[0].ref_idx = 1;
-    stack[0].attenuation = (float3)(1, 1, 1);
+    stack[0].attenuation = (float3)(0, 0, 0);
     for (int bounces = 0; bounces < 10; ++bounces){
 	HitData dat;
 	if(intersect_scene(bvh, triangles, ray, &dat)){
@@ -253,7 +253,7 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
 	    ray.origin = ray.origin + dat.t*ray.direction;
 
 	    float3 atten = stack[stack_idx].attenuation;
-	    
+
 	    float bxdf;
 	    int transmitted = 0;
 	    float3 new_direction = get_direction(dat.normal, ray.direction, mat, &bxdf, rand_state, &transmitted, stack[stack_idx]);
@@ -266,12 +266,12 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
 	    }
 	    else if (dot(dat.normal, ray.direction) < 0)
 	    	ray.origin += 0.01f*dat.normal;
-	    
-	    float r = exp(-15*(1-atten.x)*dat.t);
-	    float g = exp(-15*(1-atten.y)*dat.t);
-	    float b = exp(-15*(1-atten.z)*dat.t);
+
+	    float r = exp(-atten.x*dat.t);
+	    float g = exp(-atten.y*dat.t);
+	    float b = exp(-atten.z*dat.t);
 	    mask = mask*(float3)(r,g,b);
-	    
+
 	    color += mask*mat.emission;
 	    mask = mask*mat.color*bxdf;
 	    ray.direction = new_direction;
@@ -293,7 +293,7 @@ void kernel render(global float3* image, global uint2* seeds, global GPU_BVHnode
     int height = get_global_size(1);
     uint2 rand_state = seeds[(height-y-1)*width+x];
     rand(&rand_state);
-    
+
     //camera space unit basis vectors
     float3 w = normalize(camera.location - camera.looking_at);
     float3 u = cross((float3)(0,1,0), w);
@@ -310,7 +310,7 @@ void kernel render(global float3* image, global uint2* seeds, global GPU_BVHnode
     float3 color = (float3)(0,0,0);
     for (int sample = 0; sample < samples; ++sample){
 	Ray ray;
-	
+
 	float theta = 2*M_PI*(float)rand(&rand_state)/(float)RAND_MAX;
 	float rad = camera.lens_radius*(float)rand(&rand_state)/(float)RAND_MAX;
 	ray.origin = camera.location + rad*(u*cos(theta) + v*sin(theta));
@@ -323,8 +323,8 @@ void kernel render(global float3* image, global uint2* seeds, global GPU_BVHnode
 
 	color += trace(bvh, triangles, ray, materials, &rand_state);
     }
-    
+
     image[(height-y-1)*width+x] += color;
     seeds[(height-y-1)*width+x] = rand_state;
-    
+
 }

@@ -1,0 +1,26 @@
+LIBS := $(LIBS) -lm -lpng -lpthread -lOpenCL
+objects =  main.o Renderer.o Scene.o lodepng.o error.o float3.o BVH.o tinyply.o
+OBJS = $(objects:%.o=$(OBJ)/%.o)
+binaries = main
+BINS = $(binaries:%=$(BIN)/%)
+
+.PHONY: all
+all: $(BINS)
+
+$(BIN)/%: $(OBJ)/%.o $(OBJS)
+	@echo Linking $@
+	@mkdir -p $(BIN)
+	@$(CXX) -o $@ $(OBJS) $(FLAGS) $(CXXFLAGS) $(LIBS)
+
+.PRECIOUS: $(OBJ)/%.o
+$(OBJ)/%.o: ./src/%.c
+	@echo Compiling $<
+	@mkdir -p $(OBJ)
+	@$(CC) -MMD -c -o $@ $< $(FLAGS) $(CFLAGS)
+
+$(OBJ)/%.o: ./src/%.cpp
+	@echo Compiling $<
+	@mkdir -p $(OBJ)
+	@$(CXX) -MMD -c -o $@ $< $(FLAGS) $(CXXFLAGS)
+
+-include $(objects:%.o=$(OBJ)/%.d)

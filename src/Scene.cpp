@@ -13,8 +13,10 @@
 #include "Scene.hpp"
 #include "Material.h"
 #include "tinyply.h"
+#include "tiny_obj_loader.h"
 
 namespace tp = tinyply;
+namespace to = tinyobj;
 
 void Scene::load_materials(std::string filename){
     std::ifstream material_file(filename, std::ios::in);
@@ -201,6 +203,44 @@ void Scene::load_ply(std::string filename, int mat_idx, float3 translate, float 
     file.close();
 }
 
+void Scene::load_obj(std::string filename, int mat_idx, float3 translate, float scale, float3 xaxis, float3 yaxis){
+    float3 zaxis = cross(xaxis, yaxis);
+    float temp  = zaxis.x;
+    zaxis.x = xaxis.z;
+    xaxis.z = temp;
+    temp = zaxis.y;
+    zaxis.y = yaxis.z;
+    yaxis.z = temp;
+    temp = xaxis.y;
+    xaxis.y = yaxis.x;
+    yaxis.x = temp;
+
+    to::attrib_t attrib;
+    std::vector<to::shape_t> shapes;
+    std::vector<to::material_t> materials;
+
+    to::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, filename.c_str());
+    for (size_t s = 0; s < shapes.size(); s++) {
+        // Loop over faces(polygon)
+        size_t index_offset = 0;
+        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+            //assume triangle
+            std::vector<float3> verts(3);
+            for (size_t v = 0; v < 3; v++) {
+                // access to vertex
+                to::index_t idx = shapes[s].mesh.indices[index_offset + v];
+                to::real_t vx = attrib.vertices[3*idx.vertex_index+0];
+                to::real_t vy = attrib.vertices[3*idx.vertex_index+1];
+                to::real_t vz = attrib.vertices[3*idx.vertex_index+2];
+                float3 point = {vx,vy,vz};
+                verts[v] = (scale*float3({dot(point,xaxis), dot(point,yaxis), dot(point,zaxis)}) + translate);
+            }
+            triangles.push_back({verts[0], verts[1], verts[2], mat_idx});
+            index_offset += 3;
+        }
+    }
+}
+
 Scene::Scene(std::string filename){
     std::clog << "Reading scene..." << std::endl;
     std::ifstream scene_file(filename, std::ios::in);
@@ -225,7 +265,7 @@ Scene::Scene(std::string filename){
                 load_materials(load_name);
             else if (extension == "camera")
                 load_camera(load_name);
-            else if (extension == "ply"){
+            else if ((extension == "ply") || (extension == "obj")){
                 if (current_material == -1)
                     print_error(filename + ":" + std::to_string(line_num) + ": No material selected");
                 std::string params = str.str().substr(str.str().find(".") + 5);
@@ -234,7 +274,10 @@ Scene::Scene(std::string filename){
                 if (sscanf(params.c_str(), "{%f, %f, %f} %f {%f, %f, %f} {%f, %f, %f}",
                 &t.x, &t.y, &t.z, &s, &x.x, &x.y, &x.z, &y.x, &y.y, &y.z) != 10)
                     print_error(filename + ":" + std::to_string(line_num) + ": Incorrect parameters");
-                load_ply(load_name, current_material, t, s, x, y);
+                if (extension == "ply")
+                    load_ply(load_name, current_material, t, s, x, y);
+                else
+                    load_obj(load_name, current_material, t, s, x, y);
             }
             else
                 print_error(filename + ":" + std::to_string(line_num) + ": Extension not recognized");

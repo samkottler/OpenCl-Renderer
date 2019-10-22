@@ -1,11 +1,11 @@
 LIBS := $(LIBS) -lm -lpng -lpthread -lOpenCL
-objects =  main.o Renderer.o Scene.o lodepng.o error.o float3.o BVH.o tinyply.o
+objects =  main.o Renderer.o Scene.o lodepng.o error.o float3.o BVH.o tinyply.o tiny_obj_loader.o
 OBJS = $(objects:%.o=$(OBJ)/%.o)
 binaries = main
 BINS = $(binaries:%=$(BIN)/%)
 
-.PHONY: all
-all: $(BINS)
+.PHONY: main
+main: $(BINS)
 
 $(BIN)/%: $(OBJ)/%.o $(OBJS)
 	@echo Linking $@

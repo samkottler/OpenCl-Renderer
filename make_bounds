@@ -1,11 +1,11 @@
 LIBS := $(LIBS) -lm -lpng -lpthread -lOpenCL
-objects =  calcBounds.o error.o float3.o tinyply.o
+objects =  calcBounds.o error.o float3.o tinyply.o tiny_obj_loader.o
 OBJS = $(objects:%.o=$(OBJ)/%.o)
 binaries = calcBounds
 BINS = $(binaries:%=$(BIN)/%)
 
-.PHONY: all
-all: $(BINS)
+.PHONY: bounds
+bounds: $(BINS)
 
 $(BIN)/%: $(OBJ)/%.o $(OBJS)
 	@echo Linking $@

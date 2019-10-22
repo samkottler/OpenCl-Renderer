@@ -16,6 +16,7 @@ private:
     void load_materials(std::string filename);
     void load_camera(std::string filename);
     void load_ply(std::string filename, int mat_idx, float3 translate, float scale, float3 xaxis, float3 yaxis);
+    void load_obj(std::string filename, int mat_idx, float3 translate, float scale, float3 xaxis, float3 yaxis);
 public:
     BVH bvh;
     std::vector<Material> materials;

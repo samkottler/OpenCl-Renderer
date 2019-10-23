@@ -40,10 +40,11 @@ float tanTheta(float3 w){
 
 float Lambda(float3 w, Material mat){
     float absTanTheta = fabs(tanTheta(w));
-    if (absTanTheta > 1e20) return 0;
+    if (absTanTheta > 1e20)
+        return 0;
     float a = 1.0/(mat.alpha*absTanTheta);
     if (a>=1.6)
-	return 0;
+        return 0;
     return (1 - 1.259*a + 0.396*a*a) / (3.535*a + 2.181*a*a);
 }
 
@@ -51,24 +52,14 @@ float G(float3 in, float3 out, Material mat){
     return 1.0/(1+Lambda(in, mat)+Lambda(out, mat));
 }
 
-/*
-float D(float3 half_angle){
-    float t = tanTheta(half_angle);
-    float c = cosTheta(half_angle);
-    if (ALPHA < 0.001) return (fabs(t) < 0.001)?1:0;
-    float d = exp(-t*t/ALPHA/ALPHA) / (M_PI*ALPHA*ALPHA*c*c*c*c);
-    return d;
-    }*/
-
 float F(float etaI, float etaT, float cosThetaI){
     float sinThetaI = sqrt(1-cosThetaI*cosThetaI);
     float sinThetaT = etaI/etaT*sinThetaI;
-    //printf("%f\n", etaT);
     if (sinThetaT >= 1)
-	return 1;
+        return 1;
     float cosThetaT = sqrt(1-sinThetaT*sinThetaT);
     float r_parallel = ((etaT*cosThetaI) - (etaI*cosThetaT)) / ((etaT*cosThetaI) + (etaI*cosThetaT));
-    float r_perpendicular = ((etaT*cosThetaI) - (etaI*cosThetaT)) / ((etaT*cosThetaI) + (etaI*cosThetaT));
+    float r_perpendicular = ((etaI*cosThetaI) - (etaT*cosThetaT)) / ((etaI*cosThetaI) + (etaT*cosThetaT));
     return (r_parallel*r_parallel + r_perpendicular*r_perpendicular) / 2;
 }
 
@@ -99,52 +90,51 @@ float3 get_direction(float3 normal, float3 in, Material mat, float* bxdf, uint2*
     float etaT;
     float3 nl;
     if (win.z < 0){ // leaving
-	nl = (float3)(0,0,-1);
-	etaI = mat.ref_idx;
-	etaT = current.ref_idx;
+        nl = (float3)(0,0,-1);
+        etaI = mat.ref_idx;
+        etaT = current.ref_idx;
     }
     else{ // entering
-	nl = (float3)(0,0,1);
-	etaI = current.ref_idx;
-	etaT = mat.ref_idx;
+        nl = (float3)(0,0,1);
+        etaI = current.ref_idx;
+        etaT = mat.ref_idx;
     }
     if (ref_type > F(etaI, etaT, fabs(cosTheta(win)))){
-	*transmitted = 1;
-	*bxdf = 1;
-	float dt = fabs(cosTheta(win));
-	float ratio = etaI/etaT;
-	float disc = 1.0 - ratio*ratio*(1-dt*dt);
-	float3 refracted = ratio*(-win + dt*nl) - sqrt(disc)*nl;
-	return local_to_global(normal, refracted);
+        *transmitted = 1;
+        *bxdf = 1;
+        float dt = fabs(cosTheta(win));
+        float ratio = etaI/etaT;
+        float disc = 1.0 - ratio*ratio*(1-dt*dt);
+        float3 refracted = ratio*(-win + dt*nl) - sqrt(disc)*nl;
+        return local_to_global(normal, refracted);
     }
     float phi = 2*M_PI*((float)rand(rand_state)/(float)RAND_MAX);
     float xi = (float)(rand(rand_state))/(float)RAND_MAX;
     if(mat.type == LAMBERTIAN){
-	float costheta = acos(xi)*2/M_PI;
-	float sintheta = sqrt(1-costheta*costheta);
-	*bxdf = costheta*costheta/M_PI*2/sqrt(1-xi*xi);
-	return local_to_global(normal, (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta));
+        float costheta = acos(xi)*2/M_PI;
+        float sintheta = sqrt(1-costheta*costheta);
+        *bxdf = costheta*costheta/M_PI*2/sqrt(1-xi*xi);
+        return local_to_global(normal, (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta));
     }
     else{ // importance sampling based on pbrt
-	float tan2theta = -mat.alpha*mat.alpha*log(xi);
-	float costheta = 1/sqrt(1+tan2theta);
-	float sintheta = sqrt(1-costheta*costheta);
+        float tan2theta = -mat.alpha*mat.alpha*log(xi);
+        float costheta = 1/sqrt(1+tan2theta);
+        float sintheta = sqrt(1-costheta*costheta);
 
-	float3 w_half = (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta);
-	if (win.z*w_half.z < 0) w_half = -w_half;
+        float3 w_half = (float3)(sintheta*cos(phi), sintheta*sin(phi), costheta);
+        if (win.z*w_half.z < 0) w_half = -w_half;
 
-	float3 wout = -win + 2*w_half*dot(win,w_half);
+        float3 wout = -win + 2*w_half*dot(win,w_half);
 
-	float cout = cosTheta(wout);
-	float cin = cosTheta(win);
-	if( (cout * cin) < 0.05){
-	    *bxdf = 0;
-	    //printf("%f %f\n", G(win, wout, mat), dot(win,w_half));
-	}
-	else
-	    *bxdf = G(win, wout, mat)/cin/fabs(cosTheta(w_half))*dot(win,w_half);
+        float cout = cosTheta(wout);
+        float cin = cosTheta(win);
+        if( cout*cin < 0){
+            *bxdf = 0;
+        }
+        else
+            *bxdf = G(win, wout, mat)/cin/fabs(cosTheta(w_half))*dot(win,w_half);
 
-	return local_to_global(normal, wout);
+        return local_to_global(normal, wout);
     }
 }
 
@@ -165,7 +155,7 @@ float intersect(Triangle tri, Ray ray){
 
     float u = dot(tvec, pvec)*det;
     if (u < 0 || u > 1)
-	return -1e20;
+        return -1e20;
 
     float3 qvec = cross(tvec, tri.vert1 - tri.vert0);
 
@@ -179,20 +169,20 @@ float intersect(Triangle tri, Ray ray){
 
 float intersect_box(Box box, Ray ray){
     if (box.min.x < ray.origin.x && ray.origin.x < box.max.x &&
-	box.min.y < ray.origin.y && ray.origin.y < box.max.y &&
-	box.min.z < ray.origin.z && ray.origin.z < box.max.z) return -1;
+        box.min.y < ray.origin.y && ray.origin.y < box.max.y &&
+        box.min.z < ray.origin.z && ray.origin.z < box.max.z) return -1;
 
-	float3 tmin = (box.min - ray.origin) / ray.direction;
-	float3 tmax = (box.max - ray.origin) / ray.direction;
+    float3 tmin = (box.min - ray.origin) / ray.direction;
+    float3 tmax = (box.max - ray.origin) / ray.direction;
 
-	float3 rmin = minf3(tmin,tmax);
-	float3 rmax = maxf3(tmin,tmax);
+    float3 rmin = minf3(tmin,tmax);
+    float3 rmax = maxf3(tmin,tmax);
 
-	float minmax = fmin(fmin(rmax.x, rmax.y), rmax.z);
-	float maxmin = fmax(fmax(rmin.x, rmin.y), rmin.z);
+    float minmax = fmin(fmin(rmax.x, rmax.y), rmax.z);
+    float maxmin = fmax(fmax(rmin.x, rmin.y), rmin.z);
 
-	if(minmax >= maxmin) return maxmin > 0.000001 ? maxmin : 0;
-	else return 0;
+    if(minmax >= maxmin) return maxmin > 0.000001 ? maxmin : 0;
+    else return 0;
 }
 
 bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, HitData* dat){
@@ -204,37 +194,37 @@ bool intersect_scene(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ra
     dat->t = t;
     int id;
     while(stack_idx){
-	int boxidx = stack[stack_idx - 1]; // pop off top of stack
-	stack_idx --;
-	if(!(bvh[boxidx].u.leaf.count & 0x80000000)){ // inner
-	    Box b;
-	    b.min = bvh[boxidx].min;
-	    b.max = bvh[boxidx].max;
-	    if (intersect_box(b,ray)){
-		stack[stack_idx++] = bvh[boxidx].u.inner.left; // push right and left onto stack
-		stack[stack_idx++] = bvh[boxidx].u.inner.right;
-	    }
-	}
-	else{ // leaf
-	    for (int i = bvh[boxidx].u.leaf.offset;
-		 i < bvh[boxidx].u.leaf.offset + (bvh[boxidx].u.leaf.count & 0x7fffffff);
-		 i++){ // intersect all triangles in this box
-		if ((d = intersect(triangles[i],ray)) && d > -1e19){
-		    if(d<t && d>0.001){
-			t=d;
-			id = i;
-		    }
-		}
-	    }
-	}
+        int boxidx = stack[stack_idx - 1]; // pop off top of stack
+        stack_idx --;
+        if(!(bvh[boxidx].u.leaf.count & 0x80000000)){ // inner
+            Box b;
+            b.min = bvh[boxidx].min;
+            b.max = bvh[boxidx].max;
+            if (intersect_box(b,ray)){
+                stack[stack_idx++] = bvh[boxidx].u.inner.left; // push right and left onto stack
+                stack[stack_idx++] = bvh[boxidx].u.inner.right;
+            }
+        }
+        else{ // leaf
+            for (int i = bvh[boxidx].u.leaf.offset;
+                i < bvh[boxidx].u.leaf.offset + (bvh[boxidx].u.leaf.count & 0x7fffffff);
+                i++){ // intersect all triangles in this box
+                if ((d = intersect(triangles[i],ray)) && d > -1e19){
+                    if(d<t && d>0.000001){
+                        t=d;
+                        id = i;
+                    }
+                }
+            }
+        }
     }
     if (t<dat->t){
-	float3 v0 = triangles[id].vert0;
-	float3 v1 = triangles[id].vert1;
-	float3 v2 = triangles[id].vert2;
-	dat->t = t;
-	dat->normal = normalize(cross(v1-v0, v2-v0));
-	dat->mat = triangles[id].material;
+        float3 v0 = triangles[id].vert0;
+        float3 v1 = triangles[id].vert1;
+        float3 v2 = triangles[id].vert2;
+        dat->t = t;
+        dat->normal = normalize(cross(v1-v0, v2-v0));
+        dat->mat = triangles[id].material;
     }
     return t < 1e19;
 }
@@ -247,40 +237,40 @@ float3 trace(global GPU_BVHnode* bvh, global Triangle* triangles, Ray ray, globa
     stack[0].ref_idx = 1;
     stack[0].attenuation = (float3)(0, 0, 0);
     for (int bounces = 0; bounces < 10; ++bounces){
-	HitData dat;
-	if(intersect_scene(bvh, triangles, ray, &dat)){
-	    Material mat = materials[dat.mat];
-	    ray.origin = ray.origin + dat.t*ray.direction;
+        HitData dat;
+        if(intersect_scene(bvh, triangles, ray, &dat)){
+            Material mat = materials[dat.mat];
+            ray.origin = ray.origin + dat.t*ray.direction;
 
-	    float3 atten = stack[stack_idx].attenuation;
+            float3 atten = stack[stack_idx].attenuation;
 
-	    float bxdf;
-	    int transmitted = 0;
-	    float3 new_direction = get_direction(dat.normal, ray.direction, mat, &bxdf, rand_state, &transmitted, stack[stack_idx]);
+            float bxdf;
+            int transmitted = 0;
+            float3 new_direction = get_direction(dat.normal, ray.direction, mat, &bxdf, rand_state, &transmitted, stack[stack_idx]);
 
-	    if (transmitted){
-		if (dot(dat.normal, ray.direction) < 0)
-		    stack[++stack_idx] = mat;
-		else
-		    stack_idx--;
-	    }
-	    else if (dot(dat.normal, ray.direction) < 0)
-	    	ray.origin += 0.01f*dat.normal;
+            if (transmitted){
+                if (dot(dat.normal, ray.direction) < 0)
+                    stack[++stack_idx] = mat;
+                else
+                    stack_idx--;
+            }
+            else if (dot(dat.normal, ray.direction) < 0)
+                ray.origin += 0.000001f*dat.normal;
 
-	    float r = exp(-atten.x*dat.t);
-	    float g = exp(-atten.y*dat.t);
-	    float b = exp(-atten.z*dat.t);
-	    mask = mask*(float3)(r,g,b);
+            float r = exp(-atten.x*dat.t);
+            float g = exp(-atten.y*dat.t);
+            float b = exp(-atten.z*dat.t);
+            mask = mask*(float3)(r,g,b);
 
-	    color += mask*mat.emission;
-	    mask = mask*mat.color*bxdf;
-	    ray.direction = new_direction;
-	}
-	else{
-	    float t = (ray.direction.y + 1)/2;
-	    return color + mask*((float3)(1,1,1)*(1-t) + (float3)(0.5,0.7,1)*t);
-	}
-	if (mask.x + mask.y + mask.z < 0.01) break;
+            color += mask*mat.emission;
+            mask = mask*mat.color*bxdf;
+            ray.direction = new_direction;
+        }
+        else{
+            float t = (ray.direction.y + 1)/2;
+            return color + mask*((float3)(1,1,1)*(1-t) + (float3)(0.5,0.7,1)*t);
+        }
+        if (mask.x + mask.y + mask.z < 0.01) break;
     }
 
     return color;
@@ -309,19 +299,19 @@ void kernel render(global float3* image, global uint2* seeds, global GPU_BVHnode
 
     float3 color = (float3)(0,0,0);
     for (int sample = 0; sample < samples; ++sample){
-	Ray ray;
+        Ray ray;
 
-	float theta = 2*M_PI*(float)rand(&rand_state)/(float)RAND_MAX;
-	float rad = camera.lens_radius*(float)rand(&rand_state)/(float)RAND_MAX;
-	ray.origin = camera.location + rad*(u*cos(theta) + v*sin(theta));
+        float theta = 2*M_PI*(float)rand(&rand_state)/(float)RAND_MAX;
+        float rad = camera.lens_radius*(float)rand(&rand_state)/(float)RAND_MAX;
+        ray.origin = camera.location + rad*(u*cos(theta) + v*sin(theta));
 
-	float xs = (float)rand(&rand_state)/(float)RAND_MAX;
-	float ys = (float)rand(&rand_state)/(float)RAND_MAX;
+        float xs = (float)rand(&rand_state)/(float)RAND_MAX;
+        float ys = (float)rand(&rand_state)/(float)RAND_MAX;
 
-	ray.direction = normalize(screen_corner + horiz*(float)(x+xs)/(float)width + vert*(float)(y+ys)/(float)height - ray.origin);
+        ray.direction = normalize(screen_corner + horiz*(float)(x+xs)/(float)width + vert*(float)(y+ys)/(float)height - ray.origin);
 
 
-	color += trace(bvh, triangles, ray, materials, &rand_state);
+        color += trace(bvh, triangles, ray, materials, &rand_state);
     }
 
     image[(height-y-1)*width+x] += color;
